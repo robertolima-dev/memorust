@@ -28,11 +28,13 @@ impl Store {
         self.data.insert(key, value);
     }
 
-    pub fn get(&mut self, key: &str) -> Option<&String> {
+    pub fn get(&self, key: &str) -> Option<&String> {
+        // Read-only: a logically-expired key reads as absent, but is left for
+        // the background cleaner to remove. Keeping this `&self` lets the server
+        // serve concurrent reads under a shared lock.
         if let Some(expiration) = self.expirations.get(key) {
             if Instant::now() >= *expiration {
-                self.data.remove(key);
-                self.expirations.remove(key);
+                return None;
             }
         }
         self.data.get(key)
@@ -67,7 +69,7 @@ impl Store {
         true
     }
 
-    pub fn ttl(&mut self, key: &str) -> i64 {
+    pub fn ttl(&self, key: &str) -> i64 {
         if !self.exists(key) {
             return -2;
         }
@@ -77,8 +79,8 @@ impl Store {
                 let now = Instant::now();
 
                 if now >= *expiration {
-                    self.data.remove(key);
-                    self.expirations.remove(key);
+                    // Logically expired; reported as missing, removed later by
+                    // the background cleaner.
                     -2
                 } else {
                     expiration.duration_since(now).as_secs() as i64

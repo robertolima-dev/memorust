@@ -1,5 +1,5 @@
 use memors::command::Command;
-use memors::executor::Executor;
+use memors::executor::{Executor, Reply};
 use memors::store::Store;
 
 #[test]
@@ -14,7 +14,7 @@ fn should_execute_set_command() {
         },
     );
 
-    assert_eq!(result, "OK");
+    assert_eq!(result, Reply::Ok);
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn should_execute_get_command() {
         },
     );
 
-    assert_eq!(result, "Roberto");
+    assert_eq!(result, Reply::Bulk("Roberto".to_string()));
 }
 
 #[test]
@@ -44,7 +44,7 @@ fn should_return_nil_when_key_does_not_exist() {
         },
     );
 
-    assert_eq!(result, "NIL");
+    assert_eq!(result, Reply::Nil);
 }
 
 #[test]
@@ -53,5 +53,5 @@ fn should_execute_ping_command() {
 
     let result = Executor::execute(&mut store, Command::Ping);
 
-    assert_eq!(result, "PONG");
+    assert_eq!(result, Reply::Pong);
 }
