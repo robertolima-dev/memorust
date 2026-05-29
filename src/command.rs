@@ -35,6 +35,14 @@ pub enum Command {
 }
 
 impl Command {
+    /// Whether this command only reads state and can run under a shared lock.
+    pub fn is_read_only(&self) -> bool {
+        matches!(
+            self,
+            Command::Get { .. } | Command::Exists { .. } | Command::Ttl { .. } | Command::Ping
+        )
+    }
+
     pub fn parse(input: &str) -> Result<Self, MemorsError> {
         let parts = tokenize(input)?;
 

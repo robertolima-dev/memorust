@@ -8,10 +8,14 @@ fn should_append_and_load_commands() {
 
     let _ = fs::remove_file(path);
 
-    let aof = Aof::new(path);
+    let aof = Aof::new(path).unwrap();
 
     aof.append("SET name Roberto").unwrap();
     aof.append("SET language Rust").unwrap();
+
+    // `append` only buffers; durability is provided by `flush` (called
+    // periodically by the server's AOF flusher task).
+    aof.flush().unwrap();
 
     let commands = aof.load().unwrap();
 
@@ -32,9 +36,11 @@ fn should_return_empty_when_file_does_not_exist() {
 
     let _ = fs::remove_file(path);
 
-    let aof = Aof::new(path);
+    let aof = Aof::new(path).unwrap();
 
     let commands = aof.load().unwrap();
 
     assert!(commands.is_empty());
+
+    let _ = fs::remove_file(path);
 }

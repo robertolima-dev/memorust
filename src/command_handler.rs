@@ -1,5 +1,5 @@
 use crate::command::Command;
-use crate::executor::Executor;
+use crate::executor::{Executor, Reply};
 use crate::resp::{
     encode_bulk_string, encode_error, encode_integer, encode_null, encode_simple_string,
 };
@@ -47,6 +47,14 @@ pub async fn execute_command(
                 Ok(_) => encode_ok(resp),
                 Err(error) => encode_failure(resp, &format!("failed to clear AOF: {}", error)),
             }
+        }
+
+        command if command.is_read_only() => {
+            // Read-only commands take a shared lock, so they can run concurrently.
+            let store = store.read().await;
+            let result = Executor::execute_read(&store, &command);
+
+            encode_executor_response(&result, resp)
         }
 
         command => {
@@ -99,18 +107,23 @@ fn command_to_aof_line(command: &Command) -> String {
     }
 }
 
-fn encode_executor_response(result: &str, resp: bool) -> String {
-    if !resp {
-        return format!("{}\r\n", result);
-    }
-
-    match result {
-        "OK" => encode_simple_string("OK"),
-        "PONG" => encode_simple_string("PONG"),
-        "nil" => encode_null(),
-        "0" => encode_integer(0),
-        "1" => encode_integer(1),
-        value => encode_bulk_string(value),
+fn encode_executor_response(reply: &Reply, resp: bool) -> String {
+    if resp {
+        match reply {
+            Reply::Ok => encode_simple_string("OK"),
+            Reply::Pong => encode_simple_string("PONG"),
+            Reply::Nil => encode_null(),
+            Reply::Integer(value) => encode_integer(*value),
+            Reply::Bulk(value) => encode_bulk_string(value),
+        }
+    } else {
+        match reply {
+            Reply::Ok => "OK\r\n".to_string(),
+            Reply::Pong => "PONG\r\n".to_string(),
+            Reply::Nil => "nil\r\n".to_string(),
+            Reply::Integer(value) => format!("{}\r\n", value),
+            Reply::Bulk(value) => format!("{}\r\n", value),
+        }
     }
 }
 

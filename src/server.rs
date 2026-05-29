@@ -20,7 +20,7 @@ pub type SharedAof = Arc<Aof>;
 pub async fn run_server(addr: &str) -> std::io::Result<()> {
     let listener = TcpListener::bind(addr).await?;
 
-    let aof = Arc::new(Aof::new("appendonly.aof"));
+    let aof = Arc::new(Aof::new("appendonly.aof")?);
     let mut initial_store = Store::new();
 
     load_aof_into_store(&aof, &mut initial_store)?;
@@ -28,6 +28,7 @@ pub async fn run_server(addr: &str) -> std::io::Result<()> {
     let store = Arc::new(RwLock::new(initial_store));
 
     start_background_cleaner(Arc::clone(&store));
+    start_aof_flusher(Arc::clone(&aof));
 
     println!("Memors TCP server running on {}", addr);
 
@@ -90,16 +91,20 @@ async fn handle_client(
                     }
                 }
             } else {
-                let input = String::from_utf8_lossy(&connection_buffer).to_string();
+                match connection_buffer.iter().position(|&byte| byte == b'\n') {
+                    Some(newline_index) => {
+                        let line: Vec<u8> = connection_buffer.drain(..=newline_index).collect();
+                        let input = String::from_utf8_lossy(&line);
+                        let trimmed = input.trim();
 
-                if input.contains('\n') {
-                    connection_buffer.clear();
+                        if !trimmed.is_empty() {
+                            let response = handle_plain_text_command(trimmed, &store, &aof).await;
 
-                    let response = handle_plain_text_command(input.trim(), &store, &aof).await;
+                            stream.write_all(response.as_bytes()).await?;
+                        }
+                    }
 
-                    stream.write_all(response.as_bytes()).await?;
-                } else {
-                    break;
+                    None => break,
                 }
             }
         }
@@ -156,6 +161,20 @@ fn start_background_cleaner(store: SharedStore) {
 
             if removed > 0 {
                 println!("Cleaner removed {} expired keys", removed);
+            }
+        }
+    });
+}
+
+fn start_aof_flusher(aof: SharedAof) {
+    tokio::spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(1));
+
+        loop {
+            interval.tick().await;
+
+            if let Err(error) = aof.flush() {
+                eprintln!("AOF flush error: {}", error);
             }
         }
     });
