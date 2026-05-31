@@ -1,5 +1,5 @@
-use memors::command::Command;
-use memors::error::MemorsError;
+use memorust::command::Command;
+use memorust::error::MemorustError;
 
 #[test]
 fn should_parse_set_command() {
@@ -61,14 +61,14 @@ fn should_parse_ping_command() {
 fn should_return_unknown_command_error() {
     let command = Command::parse("INVALID");
 
-    assert_eq!(command, Err(MemorsError::UnknownCommand));
+    assert_eq!(command, Err(MemorustError::UnknownCommand));
 }
 
 #[test]
 fn should_return_missing_argument_error() {
     let command = Command::parse("GET");
 
-    assert_eq!(command, Err(MemorsError::MissingArgument));
+    assert_eq!(command, Err(MemorustError::MissingArgument));
 }
 
 #[test]

@@ -18,7 +18,7 @@ pub async fn execute_command(
 
             match aof.rewrite(entries) {
                 Ok(_) => encode_ok(resp),
-                Err(error) => encode_failure(resp, &format!("failed to rewrite AOF: {}", error)),
+                Err(error) => encode_failure(resp, &format!("failed to rewrite AOF: {error}")),
             }
         }
 
@@ -26,14 +26,14 @@ pub async fn execute_command(
             let mut store = store.write().await;
 
             let response = format!(
-                "memors_version:0.1.0\r\nkeys:{}\r\naof_enabled:1\r\nttl_enabled:1\r\nresp_enabled:1",
+                "memorust_version:0.1.0\r\nkeys:{}\r\naof_enabled:1\r\nttl_enabled:1\r\nresp_enabled:1",
                 store.key_count()
             );
 
             if resp {
                 encode_bulk_string(&response)
             } else {
-                format!("{}\r\n", response)
+                format!("{response}\r\n")
             }
         }
 
@@ -45,7 +45,7 @@ pub async fn execute_command(
 
             match aof.clear() {
                 Ok(_) => encode_ok(resp),
-                Err(error) => encode_failure(resp, &format!("failed to clear AOF: {}", error)),
+                Err(error) => encode_failure(resp, &format!("failed to clear AOF: {error}")),
             }
         }
 
@@ -62,7 +62,7 @@ pub async fn execute_command(
                 let line = command_to_aof_line(&command);
 
                 if let Err(error) = aof.append(&line) {
-                    return encode_failure(resp, &format!("failed to persist command: {}", error));
+                    return encode_failure(resp, &format!("failed to persist command: {error}"));
                 }
             }
 
@@ -84,7 +84,7 @@ fn should_persist(command: &Command) -> bool {
 fn command_to_aof_line(command: &Command) -> String {
     match command {
         Command::Set { key, value } => {
-            format!("SET {} {}", key, value)
+            format!("SET {key} {value}")
         }
 
         Command::SetEx {
@@ -92,15 +92,15 @@ fn command_to_aof_line(command: &Command) -> String {
             seconds,
             value,
         } => {
-            format!("SETEX {} {} {}", key, seconds, value)
+            format!("SETEX {key} {seconds} {value}")
         }
 
         Command::Del { key } => {
-            format!("DEL {}", key)
+            format!("DEL {key}")
         }
 
         Command::Expire { key, seconds } => {
-            format!("EXPIRE {} {}", key, seconds)
+            format!("EXPIRE {key} {seconds}")
         }
 
         _ => String::new(),
@@ -121,8 +121,8 @@ fn encode_executor_response(reply: &Reply, resp: bool) -> String {
             Reply::Ok => "OK\r\n".to_string(),
             Reply::Pong => "PONG\r\n".to_string(),
             Reply::Nil => "nil\r\n".to_string(),
-            Reply::Integer(value) => format!("{}\r\n", value),
-            Reply::Bulk(value) => format!("{}\r\n", value),
+            Reply::Integer(value) => format!("{value}\r\n"),
+            Reply::Bulk(value) => format!("{value}\r\n"),
         }
     }
 }
@@ -137,8 +137,8 @@ fn encode_ok(resp: bool) -> String {
 
 fn encode_failure(resp: bool, message: &str) -> String {
     if resp {
-        encode_error(&format!("ERR {}", message))
+        encode_error(&format!("ERR {message}"))
     } else {
-        format!("ERROR: {}\r\n", message)
+        format!("ERROR: {message}\r\n")
     }
 }

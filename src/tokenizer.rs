@@ -1,6 +1,6 @@
-use crate::error::MemorsError;
+use crate::error::MemorustError;
 
-pub fn tokenize(input: &str) -> Result<Vec<String>, MemorsError> {
+pub fn tokenize(input: &str) -> Result<Vec<String>, MemorustError> {
     let mut tokens = Vec::new();
     let mut current = String::new();
     let mut in_quotes = false;
@@ -25,7 +25,7 @@ pub fn tokenize(input: &str) -> Result<Vec<String>, MemorsError> {
     }
 
     if in_quotes {
-        return Err(MemorsError::InvalidSyntax);
+        return Err(MemorustError::InvalidSyntax);
     }
 
     if !current.is_empty() {

@@ -1,5 +1,5 @@
-use memors::error::MemorsError;
-use memors::tokenizer::tokenize;
+use memorust::error::MemorustError;
+use memorust::tokenizer::tokenize;
 
 #[test]
 fn should_tokenize_simple_command() {
@@ -33,5 +33,5 @@ fn should_tokenize_json_as_raw_string() {
 fn should_return_invalid_syntax_when_quotes_are_not_closed() {
     let tokens = tokenize("SET bio \"Rust developer");
 
-    assert_eq!(tokens, Err(MemorsError::InvalidSyntax));
+    assert_eq!(tokens, Err(MemorustError::InvalidSyntax));
 }

@@ -1,6 +1,6 @@
-use memors::command::Command;
-use memors::executor::{Executor, Reply};
-use memors::store::Store;
+use memorust::command::Command;
+use memorust::executor::{Executor, Reply};
+use memorust::store::Store;
 
 #[test]
 fn should_execute_set_command() {

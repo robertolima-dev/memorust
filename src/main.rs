@@ -1,4 +1,4 @@
-use memors::server::run_server;
+use memorust::server::run_server;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {

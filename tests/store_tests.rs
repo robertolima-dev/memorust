@@ -1,4 +1,4 @@
-use memors::store::Store;
+use memorust::store::Store;
 
 #[test]
 fn should_create_empty_store() {
@@ -10,7 +10,7 @@ fn should_create_empty_store() {
 
 #[test]
 fn should_return_none_when_key_does_not_exist() {
-    let mut store = Store::new();
+    let store = Store::new();
 
     assert_eq!(store.get("unknown"), None);
 }

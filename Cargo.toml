@@ -1,7 +1,15 @@
 [package]
-name = "memors"
+name = "memorust"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
+description = "A small, educational Redis clone: a single-binary, in-memory key-value server written in Rust with Tokio."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/robertolima-dev/memorust"
+authors = ["Roberto Lima <roberto.rigamonti.lima@gmail.com>"]
+readme = "README.md"
+keywords = ["redis", "key-value", "database", "tokio", "in-memory"]
+categories = ["database-implementations", "network-programming", "caching"]
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Memors is a small, educational Redis clone: a single-binary, in-memory key-value server written
+Memorust is a small, educational Redis clone: a single-binary, in-memory key-value server written
 in Rust (edition 2024) with Tokio as its only dependency. It is also exposed as a library crate
 (`src/lib.rs`) so the modules can be unit/integration tested directly. The codebase is
 intentionally simple and flat — everything lives in `src/*.rs`.
@@ -42,7 +42,7 @@ A command flows through these modules in order — this is the spine of the code
    - otherwise → **inline text** path (a line terminated by `\n`); calls
      `execute_command(..., resp: false)`. Also handles `EXIT`/`QUIT`.
 2. **`command.rs`** — `Command::parse(&str)` tokenizes then maps to the `Command` enum, returning
-   a `MemorsError` for unknown/malformed input. New command **parsing** goes here.
+   a `MemorustError` for unknown/malformed input. New command **parsing** goes here.
 3. **`command_handler.rs`** — `execute_command` is the async dispatcher. It handles the commands
    that need I/O or special locking (`AofRewrite`, `Info`, `FlushAll`) inline, persists mutating
    commands to the AOF *before* applying them (`should_persist` / `command_to_aof_line`), then
@@ -62,7 +62,7 @@ A command flows through these modules in order — this is the spine of the code
    server replays the AOF. Default file: `appendonly.aof` (repo root).
 
 Supporting modules: `resp.rs` (RESP parsing + `encode_*` helpers), `tokenizer.rs` (quote-aware
-whitespace splitter used by `Command::parse`), `error.rs` (`MemorsError`).
+whitespace splitter used by `Command::parse`), `error.rs` (`MemorustError`).
 
 Concurrency model: many connection tasks share one `Arc<RwLock<Store>>` and one `Arc<Aof>`; each
 command takes a short `write()` lock. AOF writes happen outside the store lock, before mutation.

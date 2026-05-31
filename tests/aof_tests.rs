@@ -1,6 +1,6 @@
 use std::fs;
 
-use memors::aof::Aof;
+use memorust::aof::Aof;
 
 #[test]
 fn should_append_and_load_commands() {
