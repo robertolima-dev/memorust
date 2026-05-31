@@ -8,54 +8,53 @@ The project is heavily inspired by Redis and aims to evolve incrementally while 
 
 ---
 
-## O que é?
+## What is it?
 
-Memorust é um clone educacional do Redis: um servidor de banco de dados
-chave-valor em memória, distribuído como um único binário e escrito em Rust
-(edition 2024), tendo o Tokio como única dependência. Ele fala o protocolo RESP,
-então é compatível com o `redis-cli` e com clientes Redis existentes, e suporta
-um subconjunto dos comandos do Redis (`PING`, `SET`, `GET`, `DEL`, `EXISTS`,
-`SETEX`, `EXPIRE`, `TTL`, `INFO`, `FLUSHALL`, `AOFREWRITE`) com TTL e persistência
-via Append Only File (AOF).
+Memorust is an educational Redis clone: a single-binary, in-memory key-value
+database server written in Rust (edition 2024), with Tokio as its only
+dependency. It speaks the RESP protocol, so it is compatible with `redis-cli`
+and existing Redis clients, and supports a subset of Redis commands (`PING`,
+`SET`, `GET`, `DEL`, `EXISTS`, `SETEX`, `EXPIRE`, `TTL`, `INFO`, `FLUSHALL`,
+`AOFREWRITE`) with TTL and Append Only File (AOF) persistence.
 
-## Por que existe?
+## Why does it exist?
 
-Memorust nasceu como um projeto de estudo para aprender, na prática, como um
-banco de dados em memória funciona por dentro: rede TCP assíncrona, design de
-protocolo, concorrência, motores de armazenamento, persistência e engenharia de
-performance. O foco é manter o código **simples e legível**, servindo como
-material de aprendizado em vez de buscar paridade total de recursos com o Redis.
+Memorust started as a study project to learn, hands-on, how an in-memory
+database works under the hood: async TCP networking, protocol design,
+concurrency, storage engines, persistence, and performance engineering. The
+focus is on keeping the code **simple and readable**, serving as learning
+material rather than aiming for full feature parity with Redis.
 
-## Como executar?
+## How to run it?
 
-Você precisa de uma toolchain Rust estável recente (a crate usa **edition 2024**,
-que exige **Rust 1.85 ou superior**). Instale via [rustup](https://rustup.rs/).
+You need a recent stable Rust toolchain (the crate uses **edition 2024**, which
+requires **Rust 1.85 or newer**). Install it via [rustup](https://rustup.rs/).
 
 ```bash
 git clone https://github.com/robertolima-dev/memorust.git
 cd memorust
-cargo run        # compila e inicia o servidor em 127.0.0.1:6379
+cargo run        # builds and starts the server on 127.0.0.1:6379
 ```
 
-Em outro terminal, interaja usando o `redis-cli` ou TCP puro:
+In another terminal, interact with it using `redis-cli` or raw TCP:
 
 ```bash
 redis-cli -p 6379
-# depois: PING / SET name Roberto / GET name / INFO
+# then: PING / SET name Roberto / GET name / INFO
 ```
 
-Para rodar os testes:
+To run the tests:
 
 ```bash
 cargo test
 ```
 
-## Como contribuir?
+## How to contribute?
 
-Contribuições são muito bem-vindas! Veja o guia de contribuição em
-[CONTRIBUTING.md](CONTRIBUTING.md) para o fluxo de desenvolvimento, os checks
-exigidos e como abrir um pull request. Ao participar do projeto, você concorda em
-seguir o nosso [Código de Conduta](CODE_OF_CONDUCT.md).
+Contributions are very welcome! See the contribution guide in
+[CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, the required
+checks, and how to open a pull request. By participating in this project, you
+agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
