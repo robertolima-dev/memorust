@@ -1,4 +1,4 @@
-use memors::resp::{
+use memorust::resp::{
     encode_bulk_string, encode_error, encode_integer, encode_null, encode_simple_string, parse_resp,
 };
 

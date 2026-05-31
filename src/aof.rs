@@ -21,7 +21,7 @@ impl Aof {
         // Only buffer here; durability is handled out-of-band by `flush`, called
         // ~once per second by the AOF flusher task. This keeps the fsync off the
         // per-command hot path (Redis' `appendfsync everysec` behaviour).
-        writeln!(writer, "{}", command)?;
+        writeln!(writer, "{command}")?;
 
         Ok(())
     }
@@ -74,7 +74,7 @@ impl Aof {
                 .open(&temp_path)?;
 
             for (key, value) in entries {
-                writeln!(file, "SET {} {}", key, value)?;
+                writeln!(file, "SET {key} {value}")?;
             }
 
             file.sync_all()?;

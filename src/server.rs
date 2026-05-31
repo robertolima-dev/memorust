@@ -30,18 +30,18 @@ pub async fn run_server(addr: &str) -> std::io::Result<()> {
     start_background_cleaner(Arc::clone(&store));
     start_aof_flusher(Arc::clone(&aof));
 
-    println!("Memors TCP server running on {}", addr);
+    println!("Memorust TCP server running on {addr}");
 
     loop {
         let (stream, socket_addr) = listener.accept().await?;
         let store = Arc::clone(&store);
         let aof = Arc::clone(&aof);
 
-        println!("Client connected: {}", socket_addr);
+        println!("Client connected: {socket_addr}");
 
         tokio::spawn(async move {
             if let Err(error) = handle_client(stream, store, aof).await {
-                eprintln!("Client error: {}", error);
+                eprintln!("Client error: {error}");
             }
         });
     }
@@ -81,7 +81,7 @@ async fn handle_client(
                     }
 
                     RespParseResult::Error(error) => {
-                        let response = encode_error(&format!("ERR {}", error));
+                        let response = encode_error(&format!("ERR {error}"));
 
                         connection_buffer.clear();
 
@@ -122,10 +122,10 @@ async fn handle_resp_parts(parts: Vec<String>, store: &SharedStore, aof: &Shared
 
     let command = match Command::parse(&raw_command) {
         Ok(command) => command,
-        Err(error) => return encode_error(&format!("ERR {}", error)),
+        Err(error) => return encode_error(&format!("ERR {error}")),
     };
 
-    execute_command(command, store, &aof, true).await
+    execute_command(command, store, aof, true).await
 }
 
 async fn handle_plain_text_command(input: &str, store: &SharedStore, aof: &SharedAof) -> String {
@@ -135,7 +135,7 @@ async fn handle_plain_text_command(input: &str, store: &SharedStore, aof: &Share
 
     match Command::parse(input) {
         Ok(command) => execute_command(command, store, aof, false).await,
-        Err(error) => format!("ERROR: {}\r\n", error),
+        Err(error) => format!("ERROR: {error}\r\n"),
     }
 }
 
@@ -143,7 +143,7 @@ async fn handle_plain_text_command(input: &str, store: &SharedStore, aof: &Share
 async fn handle_resp_command(input: &str, store: &SharedStore, aof: &SharedAof) -> String {
     let parts: Vec<String> = match parse_resp(input) {
         Ok(parts) => parts,
-        Err(error) => return encode_error(&format!("Err {}", error)),
+        Err(error) => return encode_error(&format!("Err {error}")),
     };
 
     handle_resp_parts(parts, store, aof).await
@@ -160,7 +160,7 @@ fn start_background_cleaner(store: SharedStore) {
             let removed = store.cleanup_expired_keys();
 
             if removed > 0 {
-                println!("Cleaner removed {} expired keys", removed);
+                println!("Cleaner removed {removed} expired keys");
             }
         }
     });
@@ -174,7 +174,7 @@ fn start_aof_flusher(aof: SharedAof) {
             interval.tick().await;
 
             if let Err(error) = aof.flush() {
-                eprintln!("AOF flush error: {}", error);
+                eprintln!("AOF flush error: {error}");
             }
         }
     });
@@ -189,7 +189,7 @@ fn load_aof_into_store(aof: &Aof, store: &mut Store) -> std::io::Result<()> {
                 Executor::execute(store, command);
             }
             Err(error) => {
-                eprintln!("Skipping invalid AOF line '{}': {}", line, error);
+                eprintln!("Skipping invalid AOF line '{line}': {error}");
             }
         }
     }

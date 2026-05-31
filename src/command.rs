@@ -1,4 +1,4 @@
-use crate::error::MemorsError;
+use crate::error::MemorustError;
 use crate::tokenizer::tokenize;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -43,11 +43,11 @@ impl Command {
         )
     }
 
-    pub fn parse(input: &str) -> Result<Self, MemorsError> {
+    pub fn parse(input: &str) -> Result<Self, MemorustError> {
         let parts = tokenize(input)?;
 
         if parts.is_empty() {
-            return Err(MemorsError::InvalidCommand);
+            return Err(MemorustError::InvalidCommand);
         }
 
         let command = parts[0].to_uppercase();
@@ -55,7 +55,7 @@ impl Command {
         match command.as_str() {
             "SET" => {
                 if parts.len() < 3 {
-                    return Err(MemorsError::MissingArgument);
+                    return Err(MemorustError::MissingArgument);
                 }
 
                 Ok(Command::Set {
@@ -66,12 +66,12 @@ impl Command {
 
             "SETEX" => {
                 if parts.len() < 4 {
-                    return Err(MemorsError::MissingArgument);
+                    return Err(MemorustError::MissingArgument);
                 }
 
                 let seconds = parts[2]
                     .parse::<u64>()
-                    .map_err(|_| MemorsError::InvalidSyntax)?;
+                    .map_err(|_| MemorustError::InvalidSyntax)?;
 
                 Ok(Command::SetEx {
                     key: parts[1].clone(),
@@ -82,7 +82,7 @@ impl Command {
 
             "GET" => {
                 if parts.len() < 2 {
-                    return Err(MemorsError::MissingArgument);
+                    return Err(MemorustError::MissingArgument);
                 }
 
                 Ok(Command::Get {
@@ -92,7 +92,7 @@ impl Command {
 
             "DEL" => {
                 if parts.len() < 2 {
-                    return Err(MemorsError::MissingArgument);
+                    return Err(MemorustError::MissingArgument);
                 }
 
                 Ok(Command::Del {
@@ -102,7 +102,7 @@ impl Command {
 
             "EXISTS" => {
                 if parts.len() < 2 {
-                    return Err(MemorsError::MissingArgument);
+                    return Err(MemorustError::MissingArgument);
                 }
 
                 Ok(Command::Exists {
@@ -112,12 +112,12 @@ impl Command {
 
             "EXPIRE" => {
                 if parts.len() < 3 {
-                    return Err(MemorsError::MissingArgument);
+                    return Err(MemorustError::MissingArgument);
                 }
 
                 let seconds = parts[2]
                     .parse::<u64>()
-                    .map_err(|_| MemorsError::InvalidSyntax)?;
+                    .map_err(|_| MemorustError::InvalidSyntax)?;
 
                 Ok(Command::Expire {
                     key: parts[1].clone(),
@@ -127,7 +127,7 @@ impl Command {
 
             "TTL" => {
                 if parts.len() < 2 {
-                    return Err(MemorsError::MissingArgument);
+                    return Err(MemorustError::MissingArgument);
                 }
 
                 Ok(Command::Ttl {
@@ -143,7 +143,7 @@ impl Command {
 
             "FLUSHALL" => Ok(Command::FlushAll),
 
-            _ => Err(MemorsError::UnknownCommand),
+            _ => Err(MemorustError::UnknownCommand),
         }
     }
 }

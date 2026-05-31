@@ -1,10 +1,61 @@
-# Memors
+# Memorust
 
 A lightweight in-memory database written in Rust.
 
-Memors was created as a learning project to explore systems programming, networking, concurrency, storage engines, and database internals using Rust.
+Memorust was created as a learning project to explore systems programming, networking, concurrency, storage engines, and database internals using Rust.
 
 The project is heavily inspired by Redis and aims to evolve incrementally while keeping the codebase simple and educational.
+
+---
+
+## O que é?
+
+Memorust é um clone educacional do Redis: um servidor de banco de dados
+chave-valor em memória, distribuído como um único binário e escrito em Rust
+(edition 2024), tendo o Tokio como única dependência. Ele fala o protocolo RESP,
+então é compatível com o `redis-cli` e com clientes Redis existentes, e suporta
+um subconjunto dos comandos do Redis (`PING`, `SET`, `GET`, `DEL`, `EXISTS`,
+`SETEX`, `EXPIRE`, `TTL`, `INFO`, `FLUSHALL`, `AOFREWRITE`) com TTL e persistência
+via Append Only File (AOF).
+
+## Por que existe?
+
+Memorust nasceu como um projeto de estudo para aprender, na prática, como um
+banco de dados em memória funciona por dentro: rede TCP assíncrona, design de
+protocolo, concorrência, motores de armazenamento, persistência e engenharia de
+performance. O foco é manter o código **simples e legível**, servindo como
+material de aprendizado em vez de buscar paridade total de recursos com o Redis.
+
+## Como executar?
+
+Você precisa de uma toolchain Rust estável recente (a crate usa **edition 2024**,
+que exige **Rust 1.85 ou superior**). Instale via [rustup](https://rustup.rs/).
+
+```bash
+git clone https://github.com/robertolima-dev/memorust.git
+cd memorust
+cargo run        # compila e inicia o servidor em 127.0.0.1:6379
+```
+
+Em outro terminal, interaja usando o `redis-cli` ou TCP puro:
+
+```bash
+redis-cli -p 6379
+# depois: PING / SET name Roberto / GET name / INFO
+```
+
+Para rodar os testes:
+
+```bash
+cargo test
+```
+
+## Como contribuir?
+
+Contribuições são muito bem-vindas! Veja o guia de contribuição em
+[CONTRIBUTING.md](CONTRIBUTING.md) para o fluxo de desenvolvimento, os checks
+exigidos e como abrir um pull request. Ao participar do projeto, você concorda em
+seguir o nosso [Código de Conduta](CODE_OF_CONDUCT.md).
 
 ---
 
@@ -123,7 +174,7 @@ AOF
 
 ## Persistence
 
-Memors currently uses an Append Only File (AOF).
+Memorust currently uses an Append Only File (AOF).
 
 Every mutating command is persisted:
 
@@ -281,4 +332,13 @@ This project explores:
 
 ## License
 
-MIT
+Licensed under either of
+
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in this project by you, as defined in the Apache-2.0 license, shall
+be dual licensed as above, without any additional terms or conditions.
