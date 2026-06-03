@@ -32,6 +32,10 @@ pub enum Command {
     AofRewrite,
     Info,
     FlushAll,
+    ExpireAt {
+        key: String,
+        unix_timestamp_ms: u128,
+    },
 }
 
 impl Command {
@@ -142,6 +146,21 @@ impl Command {
             "INFO" => Ok(Command::Info),
 
             "FLUSHALL" => Ok(Command::FlushAll),
+
+            "EXPIREAT" => {
+                if parts.len() < 3 {
+                    return Err(MemorustError::MissingArgument);
+                }
+
+                let unix_timestamp_ms = parts[2]
+                    .parse::<u128>()
+                    .map_err(|_| MemorustError::InvalidSyntax)?;
+
+                Ok(Command::ExpireAt {
+                    key: parts[1].clone(),
+                    unix_timestamp_ms,
+                })
+            }
 
             _ => Err(MemorustError::UnknownCommand),
         }

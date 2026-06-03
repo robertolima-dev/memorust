@@ -45,3 +45,21 @@ fn should_check_if_key_exists() {
     assert!(store.exists("name"));
     assert!(!store.exists("unknown"));
 }
+
+#[test]
+fn expire_at_should_expire_key_using_absolute_timestamp() {
+    let mut store = Store::new();
+
+    store.set("token".to_string(), "abc".to_string());
+
+    let expires_at = Store::expiration_unix_ms_from_seconds(1);
+
+    let result = store.expire_at("token", expires_at);
+
+    assert!(result);
+    assert_eq!(store.get("token"), Some(&"abc".to_string()));
+
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
+    assert_eq!(store.get("token"), None);
+}

@@ -4,6 +4,7 @@ use crate::resp::{
     encode_bulk_string, encode_error, encode_integer, encode_null, encode_simple_string,
 };
 use crate::server::{SharedAof, SharedStore};
+use crate::store::Store;
 
 pub async fn execute_command(
     command: Command,
@@ -77,7 +78,11 @@ pub async fn execute_command(
 fn should_persist(command: &Command) -> bool {
     matches!(
         command,
-        Command::Set { .. } | Command::SetEx { .. } | Command::Del { .. } | Command::Expire { .. }
+        Command::Set { .. }
+            | Command::SetEx { .. }
+            | Command::Del { .. }
+            | Command::Expire { .. }
+            | Command::ExpireAt { .. }
     )
 }
 
@@ -92,7 +97,8 @@ fn command_to_aof_line(command: &Command) -> String {
             seconds,
             value,
         } => {
-            format!("SETEX {key} {seconds} {value}")
+            let expires_at = Store::expiration_unix_ms_from_seconds(*seconds);
+            format!("SET {key} {value}\nEXPIREAT {key} {expires_at}")
         }
 
         Command::Del { key } => {
@@ -100,7 +106,8 @@ fn command_to_aof_line(command: &Command) -> String {
         }
 
         Command::Expire { key, seconds } => {
-            format!("EXPIRE {key} {seconds}")
+            let expires_at = Store::expiration_unix_ms_from_seconds(*seconds);
+            format!("EXPIREAT {key} {expires_at}")
         }
 
         _ => String::new(),
