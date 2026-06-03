@@ -79,6 +79,15 @@ impl Executor {
             Command::Info => Reply::Ok,
 
             Command::FlushAll => Reply::Ok,
+
+            Command::ExpireAt {
+                key,
+                unix_timestamp_ms,
+            } => Reply::Integer(if store.expire_at(&key, unix_timestamp_ms) {
+                1
+            } else {
+                0
+            }),
         }
     }
 }

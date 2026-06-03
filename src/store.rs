@@ -1,10 +1,18 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Default)]
 pub struct Store {
     data: HashMap<String, String>,
     expirations: HashMap<String, Instant>,
+}
+
+fn now_unix_ms() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis()
 }
 
 impl Store {
@@ -13,6 +21,30 @@ impl Store {
             data: HashMap::new(),
             expirations: HashMap::new(),
         }
+    }
+
+    pub fn expire_at(&mut self, key: &str, unix_timestamp_ms: u128) -> bool {
+        if !self.exists(key) {
+            return false;
+        }
+
+        let now_ms = now_unix_ms();
+
+        if unix_timestamp_ms <= now_ms {
+            self.del(key);
+            return true;
+        }
+
+        let duration = Duration::from_millis((unix_timestamp_ms - now_ms) as u64);
+        let expiration = Instant::now() + duration;
+
+        self.expirations.insert(key.to_string(), expiration);
+
+        true
+    }
+
+    pub fn expiration_unix_ms_from_seconds(seconds: u64) -> u128 {
+        now_unix_ms() + Duration::from_secs(seconds).as_millis()
     }
 
     pub fn set_ex(&mut self, key: String, value: String, seconds: u64) {
@@ -46,7 +78,7 @@ impl Store {
     }
 
     pub fn exists(&self, key: &str) -> bool {
-        self.data.contains_key(key)
+        self.get(key).is_some()
     }
 
     pub fn len(&self) -> usize {
