@@ -1,4 +1,5 @@
 pub mod aof;
+pub mod aof_writer;
 pub mod command;
 pub mod command_handler;
 pub mod error;

@@ -20,7 +20,7 @@ pub type SharedAof = Arc<Aof>;
 pub async fn run_server(addr: &str) -> std::io::Result<()> {
     let listener = TcpListener::bind(addr).await?;
 
-    let aof = Arc::new(Aof::new("appendonly.aof")?);
+    let aof = Arc::new(Aof::new("appendonly.aof").await?);
     let mut initial_store = Store::new();
 
     load_aof_into_store(&aof, &mut initial_store)?;

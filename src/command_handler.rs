@@ -62,7 +62,7 @@ pub async fn execute_command(
             if should_persist(&command) {
                 let line = command_to_aof_line(&command);
 
-                if let Err(error) = aof.append(&line) {
+                if let Err(error) = aof.append(&line).await {
                     return encode_failure(resp, &format!("failed to persist command: {error}"));
                 }
             }

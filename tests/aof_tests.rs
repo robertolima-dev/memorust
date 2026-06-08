@@ -2,16 +2,18 @@ use std::fs;
 
 use memorust::aof::Aof;
 
-#[test]
-fn should_append_and_load_commands() {
+#[tokio::test]
+async fn should_append_and_load_commands() {
     let path = "test_appendonly.aof";
 
     let _ = fs::remove_file(path);
 
-    let aof = Aof::new(path).unwrap();
+    let aof = Aof::new(path).await.unwrap();
 
-    aof.append("SET name Roberto").unwrap();
-    aof.append("SET language Rust").unwrap();
+    aof.append("SET name Roberto").await.unwrap();
+    aof.append("SET language Rust").await.unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     // `append` only buffers; durability is provided by `flush` (called
     // periodically by the server's AOF flusher task).
@@ -30,13 +32,13 @@ fn should_append_and_load_commands() {
     let _ = fs::remove_file(path);
 }
 
-#[test]
-fn should_return_empty_when_file_does_not_exist() {
+#[tokio::test]
+async fn should_return_empty_when_file_does_not_exist() {
     let path = "missing_appendonly.aof";
 
     let _ = fs::remove_file(path);
 
-    let aof = Aof::new(path).unwrap();
+    let aof = Aof::new(path).await.unwrap();
 
     let commands = aof.load().unwrap();
 
