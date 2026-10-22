@@ -63,3 +63,15 @@ fn expire_at_should_expire_key_using_absolute_timestamp() {
 
     assert_eq!(store.get("token"), None);
 }
+
+#[test]
+fn del_should_treat_a_logically_expired_key_as_absent() {
+    let mut store = Store::new();
+
+    store.set_ex("token".to_string(), "abc".to_string(), 0);
+
+    // Not swept by the cleaner yet, but already expired.
+    assert!(!store.exists("token"));
+    assert!(!store.del("token"));
+    assert_eq!(store.len(), 0);
+}

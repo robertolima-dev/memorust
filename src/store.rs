@@ -2,6 +2,20 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Largest relative TTL accepted (~34,000 years).
+///
+/// Keeps `Instant::now() + Duration::from_secs(seconds)` from overflowing
+/// (which panics), and keeps the absolute timestamp written to the AOF within
+/// `MAX_EXPIRE_AT_MS`, so a TTL accepted now is also accepted on replay.
+pub const MAX_EXPIRE_SECONDS: u64 = 1 << 40;
+
+/// Largest absolute expiration accepted, in Unix milliseconds.
+pub const MAX_EXPIRE_AT_MS: u128 = 1 << 62;
+
+/// A live key as captured for an AOF rewrite: key, value and its absolute
+/// expiration in Unix milliseconds (`None` = no TTL).
+pub type SnapshotEntry = (String, String, Option<u128>);
+
 #[derive(Debug, Default)]
 pub struct Store {
     data: HashMap<String, String>,
@@ -72,9 +86,15 @@ impl Store {
         self.data.get(key)
     }
 
+    /// Removes `key`, returning whether it was live. A logically-expired key
+    /// that the cleaner hasn't swept yet counts as absent, like in `exists`.
     pub fn del(&mut self, key: &str) -> bool {
+        let existed = self.exists(key);
+
         self.expirations.remove(key);
-        self.data.remove(key).is_some()
+        self.data.remove(key);
+
+        existed
     }
 
     pub fn exists(&self, key: &str) -> bool {
@@ -142,12 +162,24 @@ impl Store {
         count
     }
 
-    pub fn entries(&mut self) -> Vec<(String, String)> {
+    pub fn entries(&mut self) -> Vec<SnapshotEntry> {
         self.cleanup_expired_keys();
+
+        // Expirations are stored as `Instant`s, which mean nothing after a
+        // restart; convert them to wall-clock time for the snapshot.
+        let now = Instant::now();
+        let now_ms = now_unix_ms();
 
         self.data
             .iter()
-            .map(|(key, value)| (key.clone(), value.clone()))
+            .map(|(key, value)| {
+                let expires_at = self
+                    .expirations
+                    .get(key)
+                    .map(|expiration| now_ms + expiration.duration_since(now).as_millis());
+
+                (key.clone(), value.clone(), expires_at)
+            })
             .collect()
     }
 
