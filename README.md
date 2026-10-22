@@ -14,8 +14,9 @@ Memorust is an educational Redis clone: a single-binary, in-memory key-value
 database server written in Rust (edition 2024), with Tokio as its only
 dependency. It speaks the RESP protocol, so it is compatible with `redis-cli`
 and existing Redis clients, and supports a subset of Redis commands (`PING`,
-`SET`, `GET`, `DEL`, `EXISTS`, `SETEX`, `EXPIRE`, `TTL`, `INFO`, `FLUSHALL`,
-`AOFREWRITE`) with TTL and Append Only File (AOF) persistence.
+`SET`, `GET`, `DEL`, `EXISTS`, `SETEX`, `EXPIRE`, `EXPIREAT`, `TTL`, `INFO`,
+`FLUSHALL`, `AOFREWRITE`) with TTL and Append Only File (AOF) persistence.
+Values are text (UTF-8); see [Limits](#limits).
 
 ## Why does it exist?
 
@@ -71,11 +72,14 @@ Current implementation:
 - Append Only File (AOF) with a buffered writer
 - Periodic `fsync` (≈1s, `appendfsync everysec` style)
 - AOF replay on startup
-- AOF rewrite (compaction)
+- AOF rewrite (compaction) in the background, keeping TTLs
+- Graceful shutdown (Ctrl+C / `SIGTERM`) with a final AOF flush
 - INFO command
 - FLUSHALL command
 - Concurrent client support
 - Concurrent reads under a shared lock (GET/EXISTS/TTL/PING)
+- Inline text protocol (`nc` / `telnet`) besides RESP
+- Protocol limits against oversized or malformed input
 
 ---
 
@@ -91,6 +95,17 @@ Response:
 
 ```text
 PONG
+```
+
+Besides RESP, the server accepts inline text commands, one per line, so it can
+be used from `nc` or `telnet`. Use double quotes for values with spaces.
+`QUIT` (or `EXIT`) replies `Bye!`; close the client to disconnect:
+
+```bash
+nc 127.0.0.1 6379
+SET bio "Rust developer"
+GET bio
+QUIT
 ```
 
 ---
@@ -119,6 +134,7 @@ DEL name
 ```text
 SETEX key seconds value
 EXPIRE key seconds
+EXPIREAT key unix-time-milliseconds
 TTL key
 ```
 
@@ -127,7 +143,12 @@ Example:
 ```text
 SETEX session 60 abc123
 TTL session
+EXPIREAT session 1893456000000
 ```
+
+`TTL` returns the remaining seconds, `-1` for a key without expiration and
+`-2` for a missing key. Note that `EXPIREAT` takes **milliseconds** (Redis'
+`EXPIREAT` takes seconds; this one behaves like `PEXPIREAT`).
 
 ---
 
@@ -158,16 +179,21 @@ Client
   ↓
 TCP Server (Tokio)
   ↓
-RESP Parser
+RESP Parser  /  inline text tokenizer
   ↓
 Command Parser
   ↓
-Executor
-  ↓
-Store
-  ↓
-AOF
+Command Handler ── store write lock ──┐
+  ↓                                   │
+AOF append (buffered)                 │
+  ↓                                   │
+Executor → Store ─────────────────────┘
 ```
+
+Mutating commands are appended to the AOF and applied to the store under the
+same write lock, so the AOF always replays in the order the changes happened
+in memory. Read-only commands (`GET`, `EXISTS`, `TTL`, `PING`) take a shared
+lock and skip the AOF.
 
 ---
 
@@ -233,6 +259,20 @@ A `FLUSHALL` during a rewrite cancels it.
 
 ---
 
+## Limits
+
+Differences from Redis worth knowing:
+
+- **Values and keys are UTF-8 text.** Binary data is rejected with a protocol
+  error (the store keeps Rust `String`s).
+- **Request size:** a RESP request may be at most 64 MiB with up to 1024
+  arguments; an inline text command at most 64 KiB. On a protocol error the
+  server replies with an error and closes the connection, like Redis.
+- **Expiration:** relative TTLs are capped at 2^40 seconds; larger values
+  return `ERR invalid expire time`.
+
+---
+
 ## Running
 
 ### Start server
@@ -293,8 +333,8 @@ Current results (release build, Mac M-series development machine):
 
 | Operation | No pipeline (`-P 1`) | Pipelined (`-P 16`) |
 |-----------|----------------------|---------------------|
-| SET       | ~155k ops/sec        | ~264k ops/sec       |
-| GET       | ~158k ops/sec        | ~1.27M ops/sec      |
+| SET       | ~155k ops/sec        | ~208k ops/sec       |
+| GET       | ~140k ops/sec        | ~1.2M ops/sec       |
 
 Without pipelining the benchmark is dominated by network round-trips, so it
 mostly measures latency. Under pipelining the server's own ceiling shows: GET
@@ -303,6 +343,11 @@ writes still serialize on the exclusive lock.
 
 > Earlier versions reported ~75k SET / ~150k GET. The SET gain comes from the
 > buffered AOF writer; the GET gain comes from serving reads under a shared lock.
+>
+> Pipelined SET dropped from ~264k to ~208k ops/sec when AOF writes moved inside
+> the store lock (and records became RESP). That is the price of a correct AOF:
+> before, concurrent writes could be logged in a different order than they were
+> applied, and replay could rebuild a different state.
 
 Results may vary depending on hardware and implementation version.
 
@@ -322,6 +367,8 @@ Results may vary depending on hardware and implementation version.
 - [x] AOF Rewrite
 - [x] INFO
 - [x] FLUSHALL
+- [x] Background AOF Rewrite (keeps TTLs)
+- [x] Graceful Shutdown
 
 ### Next Steps
 
