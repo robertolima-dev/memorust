@@ -180,17 +180,34 @@ Every mutating command is persisted:
 ```text
 SET
 DEL
-SETEX
-EXPIRE
+SETEX     (stored as SET + EXPIREAT)
+EXPIRE    (stored as EXPIREAT)
+EXPIREAT
 ```
 
-Example:
+Each command is stored as a RESP array, so values with spaces, quotes or
+newlines are restored exactly. TTLs are stored as absolute Unix timestamps
+(milliseconds), so a restart doesn't extend them. Example (`SET name Roberto`,
+then `EXPIRE name 60`):
 
 ```text
-SET name Roberto
-SET city SãoPaulo
-DEL city
+*3
+$3
+SET
+$4
+name
+$7
+Roberto
+*3
+$8
+EXPIREAT
+$4
+name
+$13
+1792700000000
 ```
+
+Files written by older versions (one plain-text command per line) still load.
 
 The AOF is replayed automatically during startup.
 
@@ -204,6 +221,15 @@ flushing the file on every write. A background task flushes the buffer and
 This keeps the `fsync` off the per-command hot path — and the `fsync` itself
 runs outside the writer lock, so it does not stall in-flight writes. The
 trade-off is that up to ~1 second of recent writes can be lost on a crash.
+
+On a clean shutdown (Ctrl+C or `SIGTERM`) the server stops accepting
+connections and flushes the AOF before exiting, so no acknowledged write is
+lost.
+
+`AOFREWRITE` only holds the store lock while taking a snapshot. The snapshot is
+written to disk on a blocking thread while clients keep running; writes that
+arrive meanwhile are appended to the new file before it replaces the old one.
+A `FLUSHALL` during a rewrite cancels it.
 
 ---
 

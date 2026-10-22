@@ -34,19 +34,22 @@ Supported commands (authoritative list in `src/command.rs`):
 
 A command flows through these modules in order — this is the spine of the codebase:
 
-1. **`server.rs`** — `run_server` binds the listener, loads the AOF into a fresh `Store`,
-   spawns the background expiry cleaner, then `tokio::spawn`s one `handle_client` task per
-   connection. `handle_client` accumulates bytes and routes on the first byte:
+1. **`server.rs`** — `run_server` binds the listener and calls `serve`, which loads the AOF into
+   a fresh `Store`, spawns the background expiry cleaner and AOF flusher, then `tokio::spawn`s one
+   `handle_client` task per connection until the shutdown signal (Ctrl+C / SIGTERM), when it
+   takes the store write lock and does a final AOF flush. `handle_client` accumulates bytes and routes on the first byte:
    - buffer starts with `*` → **RESP array** path via `resp::parse_resp_frame` (length-prefixed,
      handles partial reads via `Incomplete`); calls `execute_command(..., resp: true)`.
    - otherwise → **inline text** path (a line terminated by `\n`); calls
      `execute_command(..., resp: false)`. Also handles `EXIT`/`QUIT`.
-2. **`command.rs`** — `Command::parse(&str)` tokenizes then maps to the `Command` enum, returning
-   a `MemorustError` for unknown/malformed input. New command **parsing** goes here.
+2. **`command.rs`** — `Command::from_args(&[String])` maps already-split arguments to the
+   `Command` enum, returning a `MemorustError` for unknown/malformed input. The RESP path and AOF
+   replay call it directly; `Command::parse(&str)` (inline text) tokenizes first, then calls it.
+   New command **parsing** goes here.
 3. **`command_handler.rs`** — `execute_command` is the async dispatcher. It handles the commands
-   that need I/O or special locking (`AofRewrite`, `Info`, `FlushAll`) inline, persists mutating
-   commands to the AOF *before* applying them (`should_persist` / `command_to_aof_line`), then
-   delegates the actual store mutation to `Executor::execute`. The `resp: bool` parameter selects
+   that need I/O or special locking (`AofRewrite`, `Info`, `FlushAll`) inline. For mutating
+   commands it takes the store write lock, appends the AOF records (`aof_records`), then delegates
+   the actual store mutation to `Executor::execute` — both under the same lock. The `resp: bool` parameter selects
    the response format: real RESP encodings (`+OK\r\n`, `$-1\r\n`, `:1\r\n`, bulk strings) when
    true, plain `…\r\n` text when false.
 4. **`executor.rs`** — `Executor::execute(&mut Store, Command) -> String` is the **synchronous core**
@@ -57,15 +60,22 @@ A command flows through these modules in order — this is the spine of the code
    synchronized**; the server wraps it in `Arc<RwLock<Store>>` (`SharedStore`). Expiry is lazy
    (checked on `get`/`ttl`) plus a periodic `cleanup_expired_keys` sweep run every 5s by the
    background task.
-6. **`aof.rs`** — `Aof` appends each mutating command as a plaintext line; `rewrite` compacts the
-   log to a `SET`-only snapshot (temp file + atomic rename); `load` reads it back. On startup the
+6. **`aof.rs`** — `Aof` appends each mutating command as a RESP array (explicit lengths, so any
+   value round-trips); `start_rewrite` + `complete_rewrite` compact the log to a `SET` + `EXPIREAT`
+   snapshot (temp file + atomic rename) without holding the store lock while writing, keeping
+   records appended meanwhile in `pending`; `load` reads it back (and still accepts the old one-command-per-line format). On startup the
    server replays the AOF. Default file: `appendonly.aof` (repo root).
 
 Supporting modules: `resp.rs` (RESP parsing + `encode_*` helpers), `tokenizer.rs` (quote-aware
 whitespace splitter used by `Command::parse`), `error.rs` (`MemorustError`).
 
 Concurrency model: many connection tasks share one `Arc<RwLock<Store>>` and one `Arc<Aof>`; each
-command takes a short `write()` lock. AOF writes happen outside the store lock, before mutation.
+command takes a short `write()` lock. Mutating commands append to the AOF *inside* that lock, so
+the AOF order always matches the order mutations hit memory; `AOFREWRITE` and `FLUSHALL` rely on
+this (they discard the AOF's unflushed buffer instead of writing it). Blocking file work —
+the periodic `flush`/fsync and `complete_rewrite` — runs on `spawn_blocking`, never on an async
+worker; `start_rewrite` + `Store::entries` run together under the store lock, and a `FLUSHALL`
+during a rewrite aborts it.
 
 ## Gotchas
 
@@ -73,16 +83,17 @@ command takes a short `write()` lock. AOF writes happen outside the store lock, 
   (locking, AOF persistence, RESP-vs-text formatting) and special commands; `executor.rs` owns the
   pure store mutation. When adding a command, you typically touch `command.rs` (parse),
   `executor.rs` (apply), and — if it mutates or needs special handling — `command_handler.rs`
-  (persistence/dispatch). Add its AOF serialization to `command_to_aof_line` and `should_persist`
-  if it must survive restarts.
+  (persistence/dispatch). `aof_records` matches every variant on purpose: decide there whether the
+  new command is persisted. Store relative TTLs as absolute `EXPIREAT`.
 - **Sentinel-string coupling.** `executor.rs` returns magic strings that
   `command_handler::encode_executor_response` pattern-matches to pick a RESP type. Returning a new
   shape from the executor without updating that match will mis-encode the reply.
 - **`resp` flag dual protocol.** The same handler serves both RESP clients (redis-cli) and raw
   inline text; respect the `resp` bool when adding responses.
-- `parse_resp` (the line-based parser in `resp.rs`) is only reached by the `#[allow(dead_code)]`
-  `handle_resp_command`; the live RESP path uses `parse_resp_frame`. Both are covered by tests.
+- `parse_resp_frame` works on bytes and enforces `MAX_FRAME_LEN` / `MAX_ARRAY_LEN`; on a framing
+  error the server closes the connection (it can't tell where the next command starts).
 - `appendonly.aof` is committed and is rewritten at runtime, so it routinely shows up as modified
   in `git status` after running the server (it is also listed in `.gitignore`).
 - Tests are integration tests in `tests/` (`command_tests`, `store_tests`, `resp_tests`,
-  `tokenizer_tests`, `aof_tests`, `executor_tests`), exercising the library crate's public API.
+  `tokenizer_tests`, `aof_tests`, `executor_tests`, plus `persistence_tests` — handler + replay —
+  and `server_tests` — real TCP), exercising the library crate's public API.

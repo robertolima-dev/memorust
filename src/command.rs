@@ -1,4 +1,5 @@
 use crate::error::MemorustError;
+use crate::store::{MAX_EXPIRE_AT_MS, MAX_EXPIRE_SECONDS};
 use crate::tokenizer::tokenize;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -47,9 +48,15 @@ impl Command {
         )
     }
 
+    /// Parses an inline text command (`SET name "Roberto Lima"`).
     pub fn parse(input: &str) -> Result<Self, MemorustError> {
-        let parts = tokenize(input)?;
+        Self::from_args(&tokenize(input)?)
+    }
 
+    /// Builds a command from arguments that are already split, e.g. the bulk
+    /// strings of a RESP array. They are used as-is: no re-tokenizing, so
+    /// spaces, quotes and empty strings are preserved.
+    pub fn from_args(parts: &[String]) -> Result<Self, MemorustError> {
         if parts.is_empty() {
             return Err(MemorustError::InvalidCommand);
         }
@@ -73,9 +80,7 @@ impl Command {
                     return Err(MemorustError::MissingArgument);
                 }
 
-                let seconds = parts[2]
-                    .parse::<u64>()
-                    .map_err(|_| MemorustError::InvalidSyntax)?;
+                let seconds = parse_seconds(&parts[2])?;
 
                 Ok(Command::SetEx {
                     key: parts[1].clone(),
@@ -119,9 +124,7 @@ impl Command {
                     return Err(MemorustError::MissingArgument);
                 }
 
-                let seconds = parts[2]
-                    .parse::<u64>()
-                    .map_err(|_| MemorustError::InvalidSyntax)?;
+                let seconds = parse_seconds(&parts[2])?;
 
                 Ok(Command::Expire {
                     key: parts[1].clone(),
@@ -156,6 +159,10 @@ impl Command {
                     .parse::<u128>()
                     .map_err(|_| MemorustError::InvalidSyntax)?;
 
+                if unix_timestamp_ms > MAX_EXPIRE_AT_MS {
+                    return Err(MemorustError::InvalidExpireTime);
+                }
+
                 Ok(Command::ExpireAt {
                     key: parts[1].clone(),
                     unix_timestamp_ms,
@@ -165,4 +172,16 @@ impl Command {
             _ => Err(MemorustError::UnknownCommand),
         }
     }
+}
+
+fn parse_seconds(input: &str) -> Result<u64, MemorustError> {
+    let seconds = input
+        .parse::<u64>()
+        .map_err(|_| MemorustError::InvalidSyntax)?;
+
+    if seconds > MAX_EXPIRE_SECONDS {
+        return Err(MemorustError::InvalidExpireTime);
+    }
+
+    Ok(seconds)
 }

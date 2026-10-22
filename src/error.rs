@@ -6,6 +6,8 @@ pub enum MemorustError {
     MissingArgument,
     UnknownCommand,
     InvalidSyntax,
+    InvalidExpireTime,
+    FrameTooLarge,
 }
 
 impl fmt::Display for MemorustError {
@@ -15,6 +17,8 @@ impl fmt::Display for MemorustError {
             MemorustError::MissingArgument => write!(f, "missing argument"),
             MemorustError::UnknownCommand => write!(f, "unknown command"),
             MemorustError::InvalidSyntax => write!(f, "invalid syntax"),
+            MemorustError::InvalidExpireTime => write!(f, "invalid expire time"),
+            MemorustError::FrameTooLarge => write!(f, "frame too large"),
         }
     }
 }

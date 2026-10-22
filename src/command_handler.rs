@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use crate::aof::Record;
 use crate::command::Command;
 use crate::executor::{Executor, Reply};
 use crate::resp::{
@@ -14,12 +17,26 @@ pub async fn execute_command(
 ) -> String {
     match command {
         Command::AofRewrite => {
-            let mut store = store.write().await;
-            let entries = store.entries();
+            // Only the snapshot is taken under the store lock; writing it to disk
+            // happens on a blocking thread while other clients keep running.
+            // Writes arriving meanwhile are captured by the AOF and appended to
+            // the new file when it is swapped in.
+            let entries = {
+                let mut store = store.write().await;
 
-            match aof.rewrite(entries) {
-                Ok(_) => encode_ok(resp),
-                Err(error) => encode_failure(resp, &format!("failed to rewrite AOF: {error}")),
+                if let Err(error) = aof.start_rewrite() {
+                    return encode_failure(resp, &format!("failed to rewrite AOF: {error}"));
+                }
+
+                store.entries()
+            };
+
+            let aof = Arc::clone(aof);
+
+            match tokio::task::spawn_blocking(move || aof.complete_rewrite(entries)).await {
+                Ok(Ok(())) => encode_ok(resp),
+                Ok(Err(error)) => encode_failure(resp, &format!("failed to rewrite AOF: {error}")),
+                Err(error) => encode_failure(resp, &format!("AOF rewrite task failed: {error}")),
             }
         }
 
@@ -39,15 +56,18 @@ pub async fn execute_command(
         }
 
         Command::FlushAll => {
-            {
-                let mut store = store.write().await;
-                store.flush_all();
+            // Truncate the AOF and wipe memory under the same lock, so no write
+            // can land between the two. AOF first: if it fails, memory is untouched
+            // and both still agree.
+            let mut store = store.write().await;
+
+            if let Err(error) = aof.clear() {
+                return encode_failure(resp, &format!("failed to clear AOF: {error}"));
             }
 
-            match aof.clear() {
-                Ok(_) => encode_ok(resp),
-                Err(error) => encode_failure(resp, &format!("failed to clear AOF: {error}")),
-            }
+            store.flush_all();
+
+            encode_ok(resp)
         }
 
         command if command.is_read_only() => {
@@ -59,15 +79,19 @@ pub async fn execute_command(
         }
 
         command => {
-            if should_persist(&command) {
-                let line = command_to_aof_line(&command);
+            // Append and apply under the same write lock: the AOF order is then
+            // exactly the order mutations hit memory, so replay rebuilds the same
+            // state. Appending only fills a buffer, so the lock stays short.
+            let mut store = store.write().await;
 
-                if let Err(error) = aof.append(&line) {
+            let records = aof_records(&command);
+
+            if !records.is_empty() {
+                if let Err(error) = aof.append(&records) {
                     return encode_failure(resp, &format!("failed to persist command: {error}"));
                 }
             }
 
-            let mut store = store.write().await;
             let result = Executor::execute(&mut store, command);
 
             encode_executor_response(&result, resp)
@@ -75,43 +99,53 @@ pub async fn execute_command(
     }
 }
 
-fn should_persist(command: &Command) -> bool {
-    matches!(
-        command,
-        Command::Set { .. }
-            | Command::SetEx { .. }
-            | Command::Del { .. }
-            | Command::Expire { .. }
-            | Command::ExpireAt { .. }
-    )
-}
-
-fn command_to_aof_line(command: &Command) -> String {
+/// AOF records that reproduce `command` on replay.
+///
+/// Relative TTLs are stored as absolute `EXPIREAT`s so replaying later doesn't
+/// extend them. The match is exhaustive on purpose: a new command must decide
+/// here whether it is persisted.
+fn aof_records(command: &Command) -> Vec<Record> {
     match command {
-        Command::Set { key, value } => {
-            format!("SET {key} {value}")
-        }
+        Command::Set { key, value } => vec![args(&["SET", key, value])],
 
         Command::SetEx {
             key,
             seconds,
             value,
         } => {
-            let expires_at = Store::expiration_unix_ms_from_seconds(*seconds);
-            format!("SET {key} {value}\nEXPIREAT {key} {expires_at}")
+            let expires_at = Store::expiration_unix_ms_from_seconds(*seconds).to_string();
+
+            vec![
+                args(&["SET", key, value]),
+                args(&["EXPIREAT", key, &expires_at]),
+            ]
         }
 
-        Command::Del { key } => {
-            format!("DEL {key}")
-        }
+        Command::Del { key } => vec![args(&["DEL", key])],
 
         Command::Expire { key, seconds } => {
-            let expires_at = Store::expiration_unix_ms_from_seconds(*seconds);
-            format!("EXPIREAT {key} {expires_at}")
+            let expires_at = Store::expiration_unix_ms_from_seconds(*seconds).to_string();
+
+            vec![args(&["EXPIREAT", key, &expires_at])]
         }
 
-        _ => String::new(),
+        Command::ExpireAt {
+            key,
+            unix_timestamp_ms,
+        } => vec![args(&["EXPIREAT", key, &unix_timestamp_ms.to_string()])],
+
+        Command::Get { .. }
+        | Command::Exists { .. }
+        | Command::Ttl { .. }
+        | Command::Ping
+        | Command::AofRewrite
+        | Command::Info
+        | Command::FlushAll => Vec::new(),
     }
+}
+
+fn args(parts: &[&str]) -> Record {
+    parts.iter().map(|part| part.to_string()).collect()
 }
 
 fn encode_executor_response(reply: &Reply, resp: bool) -> String {
